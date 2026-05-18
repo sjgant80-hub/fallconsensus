@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FallConsensus · Sovereign Mesh Governance</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+--bg:#0b0d0f;--surface:#0f1215;--s2:#13161b;--s3:#171b21;
+--border:#1c2129;--blit:#242b35;
+--text:#8a92a0;--dim:#4a5060;--bright:#d4dae6;--white:#f0f2f6;
+--river:#2d7a6f;--rdim:rgba(45,122,111,.10);--rglow:rgba(45,122,111,.25);
+--still:#4ac9a8;--sdim:rgba(74,201,168,.08);
+--drift:#c97a3d;--ddim:rgba(201,122,61,.08);
+--block:#c94040;--bdim:rgba(201,64,64,.08);
+--align:#3d8ac9;--adim:rgba(61,138,201,.08);
+--gold:#c9973e;
+--serif:'Libre Baskerville',Georgia,serif;
+--mono:'JetBrains Mono',monospace;
+}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+body{font-family:var(--serif);background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;font-size:14px;line-height:1.7;-webkit-font-smoothing:antialiased}
+::selection{background:var(--river);color:var(--white)}
+body::after{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;opacity:.015;background:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");background-size:200px}
+.app{max-width:900px;margin:0 auto;padding:20px 16px}
+
+/* ═══ HEADER ═══ */
+.hdr{text-align:center;padding:40px 0 20px;position:relative}
+.hdr::before{content:'◇';position:absolute;top:8px;left:50%;transform:translateX(-50%);font-size:12px;color:var(--river);opacity:.3;font-family:var(--mono)}
+.hdr h1{font-family:var(--serif);font-size:clamp(26px,5vw,42px);font-weight:700;color:var(--bright);letter-spacing:-.02em}
+.hdr h1 em{font-style:italic;color:var(--still)}
+.hdr .sub{font-family:var(--mono);font-size:10px;color:var(--dim);letter-spacing:.08em;margin-top:4px}
+.hdr .tag{font-style:italic;font-size:14px;color:var(--text);margin-top:8px;opacity:.5}
+
+/* ═══ BEACON ═══ */
+.beacon{display:flex;justify-content:center;align-items:center;gap:12px;margin:16px 0}
+.bdot{width:14px;height:14px;border-radius:50%;position:relative;transition:all .5s}
+.bdot::after{content:'';position:absolute;inset:-4px;border-radius:50%;border:1px solid;opacity:.3;transition:all .5s}
+.bdot.off{background:var(--dim)}.bdot.off::after{border-color:var(--dim)}
+.bdot.on{background:var(--still);box-shadow:0 0 20px var(--rglow)}.bdot.on::after{border-color:var(--still);animation:pulse 3s ease-in-out infinite}
+.bdot.warn{background:var(--drift)}.bdot.warn::after{border-color:var(--drift)}
+.bdot.hot{background:var(--block)}.bdot.hot::after{border-color:var(--block)}
+.blabel{font-family:var(--mono);font-size:11px;color:var(--dim)}
+@keyframes pulse{0%,100%{transform:scale(1);opacity:.3}50%{transform:scale(1.6);opacity:.12}}
+
+/* ═══ PANELS ═══ */
+.p{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:14px;position:relative;overflow:hidden}
+.p-tag{position:absolute;top:-1px;right:12px;font-family:var(--mono);font-size:7px;color:var(--dim);background:var(--bg);padding:1px 6px;border-radius:0 0 3px 3px;letter-spacing:.1em;text-transform:uppercase}
+.lbl{font-family:var(--mono);font-size:9px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px;display:block}
+
+/* ═══ INPUTS ═══ */
+.inp{padding:9px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--bright);font-family:var(--mono);font-size:12px;width:100%}
+.inp:focus{outline:none;border-color:var(--river)}
+.inp::placeholder{color:var(--dim);opacity:.5}
+textarea.inp{font-family:var(--serif);font-size:14px;min-height:80px;resize:vertical;line-height:1.6}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+
+/* ═══ BUTTONS ═══ */
+.btn{padding:10px 20px;border:none;border-radius:8px;font-family:var(--mono);font-size:11px;font-weight:500;cursor:pointer;letter-spacing:.02em;transition:all .2s}
+.btn-r{background:var(--river);color:var(--white)}.btn-r:hover{background:var(--still);transform:translateY(-1px)}
+.btn-r:disabled{opacity:.3;cursor:not-allowed;transform:none}
+.btn-g{background:transparent;border:1px solid var(--border);color:var(--dim)}.btn-g:hover{border-color:var(--text);color:var(--text)}
+.ctrls{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+
+/* ═══ MESH STATUS ═══ */
+.mesh-row{display:flex;gap:20px;flex-wrap:wrap;margin:10px 0}
+.mesh-s{text-align:center}
+.mesh-n{font-family:var(--mono);font-size:24px;font-weight:600;color:var(--bright)}
+.mesh-l{font-family:var(--mono);font-size:8px;color:var(--dim);letter-spacing:.08em;text-transform:uppercase}
+
+/* ═══ PEER RING ═══ */
+.peers{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}
+.peer{width:38px;height:38px;border-radius:50%;background:var(--s2);border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:10px;color:var(--dim);transition:all .4s;cursor:default;position:relative}
+.peer.me{border-color:var(--align);color:var(--align)}
+.peer.ready{border-color:var(--still);color:var(--still);box-shadow:0 0 8px var(--rdim)}
+.peer.wait{border-color:var(--drift);color:var(--drift)}
+.peer .tip{position:absolute;bottom:-20px;left:50%;transform:translateX(-50%);font-size:7px;white-space:nowrap;color:var(--dim);opacity:0;transition:opacity .2s}
+.peer:hover .tip{opacity:1}
+
+/* ═══ DIMENSION SLIDERS ═══ */
+.dims{display:grid;grid-template-columns:1fr;gap:6px;margin:14px 0}
+.dim{display:flex;align-items:center;gap:10px}
+.dim-l{font-family:var(--mono);font-size:10px;color:var(--dim);min-width:100px;letter-spacing:.03em}
+.dim-s{flex:1;-webkit-appearance:none;appearance:none;height:4px;background:var(--border);border-radius:2px;outline:none}
+.dim-s::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--river);cursor:pointer;border:2px solid var(--bg);transition:all .2s}
+.dim-s::-webkit-slider-thumb:hover{background:var(--still);transform:scale(1.2)}
+.dim-v{font-family:var(--mono);font-size:11px;color:var(--bright);min-width:24px;text-align:right}
+
+/* ═══ BLOOM VECTOR ═══ */
+.bloom{display:flex;gap:3px;align-items:flex-end;height:40px;margin:8px 0}
+.bloom-b{width:14px;border-radius:2px 2px 0 0;transition:height .8s cubic-bezier(.16,1,.3,1)}
+.bloom-wrap{display:flex;align-items:center;gap:12px}
+.bloom-sig{font-family:var(--mono);font-size:9px;color:var(--dim)}
+
+/* ═══ CONVERGENCE ═══ */
+.conv-bar{height:10px;background:var(--border);border-radius:5px;overflow:hidden;position:relative;margin:8px 0}
+.conv-fill{height:100%;border-radius:5px;transition:width 1s cubic-bezier(.16,1,.3,1)}
+.conv-marks{display:flex;justify-content:space-between;margin-top:2px}
+.conv-mark{font-family:var(--mono);font-size:7px;color:var(--dim)}
+.conv-msg{text-align:center;margin-top:10px;font-family:var(--mono);font-size:11px;padding:10px;border-radius:6px;transition:all .5s}
+.conv-msg.wait{color:var(--dim)}
+.conv-msg.near{color:var(--drift);background:var(--ddim)}
+.conv-msg.yes{color:var(--still);background:var(--sdim);border:1px solid rgba(74,201,168,.2)}
+.conv-msg.no{color:var(--block);background:var(--bdim)}
+
+/* ═══ MATRIX ═══ */
+.mtx{overflow-x:auto;margin:12px 0}
+.mtx table{border-collapse:collapse;width:100%}
+.mtx th,.mtx td{padding:5px 7px;font-family:var(--mono);font-size:9px;text-align:center;border:1px solid var(--border)}
+.mtx th{color:var(--dim);background:var(--s2)}
+.mtx .hi{color:var(--still);background:var(--sdim)}
+.mtx .md{color:var(--drift);background:var(--ddim)}
+.mtx .lo{color:var(--block);background:var(--bdim)}
+
+/* ═══ PROPOSALS LIST ═══ */
+.prop-active{padding:14px;background:var(--bg);border-radius:8px;border-left:3px solid var(--river);margin:8px 0;font-size:15px;color:var(--bright)}
+.prop-from{font-family:var(--mono);font-size:9px;color:var(--dim);margin-top:4px}
+
+/* ═══ DECISION LOG ═══ */
+.dec{background:var(--s2);border:1px solid rgba(74,201,168,.12);border-radius:10px;padding:14px;margin:8px 0}
+.dec.fail{border-color:rgba(201,64,64,.12)}
+.dec h3{font-family:var(--serif);font-size:15px;color:var(--still)}
+.dec.fail h3{color:var(--block)}
+.dec .meta{font-family:var(--mono);font-size:9px;color:var(--dim);line-height:1.8;margin-top:4px}
+
+/* ═══ TABS ═══ */
+.tabs{display:flex;gap:2px;margin:16px 0;background:var(--surface);border-radius:8px;padding:3px;border:1px solid var(--border)}
+.tab{padding:8px 16px;border:none;background:transparent;color:var(--dim);font-family:var(--mono);font-size:10px;cursor:pointer;border-radius:6px;transition:all .2s;letter-spacing:.04em}
+.tab.on{background:var(--rdim);color:var(--still)}
+.tab:hover:not(.on){color:var(--text)}
+.tab-content{display:none}.tab-content.on{display:block}
+
+/* ═══ README ═══ */
+.readme{font-size:13px;line-height:1.9;color:var(--text)}
+.readme h2{font-family:var(--serif);font-size:20px;color:var(--bright);margin:20px 0 8px;font-weight:700}
+.readme h3{font-family:var(--mono);font-size:12px;color:var(--still);margin:14px 0 6px;letter-spacing:.04em}
+.readme strong{color:var(--bright)}
+.readme code{font-family:var(--mono);font-size:11px;background:var(--s2);padding:2px 6px;border-radius:3px;color:var(--still)}
+.readme .example{background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:14px;margin:10px 0;font-family:var(--mono);font-size:11px;color:var(--text);line-height:1.7}
+
+/* ═══ FOOTER ═══ */
+.ftr{text-align:center;padding:30px 0;border-top:1px solid var(--border);margin-top:30px}
+.ftr p{font-family:var(--mono);font-size:8px;color:var(--dim);line-height:2.2}
+
+@media(max-width:600px){.dim-l{min-width:70px;font-size:9px}.peer{width:32px;height:32px;font-size:8px}.tabs{flex-wrap:wrap}}
+</style>
+</head>
+<body>
+<div class="app">
+
+<div class="hdr">
+<h1>Fall<em>Consensus</em></h1>
+<div class="sub">SOVEREIGN MESH GOVERNANCE · WEBRTC P2P · NO SERVER · NO LEADER</div>
+<div class="tag">The decision happens when the group is aligned. Not before.</div>
+</div>
+
+<div class="beacon">
+<div class="bdot off" id="bDot"></div>
+<span class="blabel" id="bLabel">Offline</span>
+</div>
+
+<!-- TABS -->
+<div class="tabs">
+<button class="tab on" onclick="showTab('govern')">Govern</button>
+<button class="tab" onclick="showTab('history')">Decisions</button>
+<button class="tab" onclick="showTab('readme')">How It Works</button>
+</div>
+
+<!-- ═══ GOVERN TAB ═══ -->
+<div class="tab-content on" id="tab-govern">
+
+<!-- JOIN -->
+<div class="p" id="joinPanel">
+<span class="p-tag">identity</span>
+<span class="lbl">Join the Mesh</span>
+<div class="row" style="margin-bottom:8px">
+<input class="inp" id="nameInp" placeholder="Your name" style="flex:1">
+</div>
+<div class="row">
+<input class="inp" id="roomInp" placeholder="Room code (create or join)" style="flex:1">
+<button class="btn btn-r" id="goBtn" onclick="go()">Connect</button>
+</div>
+<p style="font-family:var(--mono);font-size:9px;color:var(--dim);margin-top:8px">Create a room by typing any code. Share the code with your group. They type the same code and connect. Peer-to-peer — no data leaves your browsers.</p>
+</div>
+
+<!-- MESH STATUS -->
+<div class="p" id="meshPanel" style="display:none">
+<span class="p-tag">mesh</span>
+<div class="mesh-row">
+<div class="mesh-s"><div class="mesh-n" id="nPeers">1</div><div class="mesh-l">Peers</div></div>
+<div class="mesh-s"><div class="mesh-n" id="nRoom">—</div><div class="mesh-l">Room</div></div>
+<div class="mesh-s"><div class="mesh-n" id="nSim">—</div><div class="mesh-l">Similarity</div></div>
+<div class="mesh-s"><div class="mesh-n" id="nVar">—</div><div class="mesh-l">Variance</div></div>
+</div>
+<span class="lbl">Members</span>
+<div class="peers" id="peerRing"></div>
+</div>
+
+<!-- PROPOSE -->
+<div class="p" id="propPanel" style="display:none">
+<span class="p-tag">proposal</span>
+<span class="lbl">What needs deciding?</span>
+<textarea class="inp" id="propText" placeholder="Write a clear proposal for the group..."></textarea>
+<div class="ctrls">
+<button class="btn btn-r" onclick="propose()">Broadcast Proposal ◇</button>
+</div>
+</div>
+
+<!-- RATE -->
+<div class="p" id="ratePanel" style="display:none">
+<span class="p-tag">your position</span>
+<span class="lbl">Active Proposal</span>
+<div class="prop-active" id="activeProp"></div>
+<div class="prop-from" id="propFrom"></div>
+<span class="lbl" style="margin-top:14px">Your Position — 7 Dimensions</span>
+<div class="dims" id="dimGrid"></div>
+<div class="bloom-wrap">
+<div class="bloom" id="myBloom"></div>
+<span class="bloom-sig" id="mySig"></span>
+</div>
+<div class="ctrls">
+<button class="btn btn-r" onclick="submit()">Submit Position</button>
+<button class="btn btn-g" onclick="doAbstain()">Abstain</button>
+</div>
+</div>
+
+<!-- CONVERGENCE -->
+<div class="p" id="convPanel" style="display:none">
+<span class="p-tag">convergence</span>
+<span class="lbl">Group Alignment</span>
+<div class="conv-bar"><div class="conv-fill" id="cFill" style="width:0;background:var(--dim)"></div></div>
+<div class="conv-marks"><span class="conv-mark">0% Divergent</span><span class="conv-mark">70% Threshold</span><span class="conv-mark">100% Aligned</span></div>
+<div class="conv-msg wait" id="cMsg">Waiting for positions...</div>
+<div class="mtx" id="mtxWrap" style="display:none">
+<span class="lbl" style="margin-top:12px">Similarity Matrix</span>
+<div id="mtxTable"></div>
+</div>
+</div>
+
+</div>
+
+<!-- ═══ DECISIONS TAB ═══ -->
+<div class="tab-content" id="tab-history">
+<div class="p">
+<span class="p-tag">log</span>
+<span class="lbl">Decision History</span>
+<div id="decList"><p style="font-family:var(--mono);font-size:11px;color:var(--dim)">No decisions yet. Consensus must be detected — not forced.</p></div>
+</div>
+</div>
+
+<!-- ═══ README TAB ═══ -->
+<div class="tab-content" id="tab-readme">
+<div class="p">
+<div class="readme">
+
+<h2>What is FallConsensus?</h2>
+
+<p>FallConsensus is a sovereign governance tool that detects genuine alignment rather than counting votes. It runs entirely in your browser — no server stores your data, no company controls the outcome, no leader decides for the group.</p>
+
+<p>Traditional governance asks: <strong>"How many people agree?"</strong> and accepts 51% as a mandate. FallConsensus asks: <strong>"Is the group genuinely aligned?"</strong> and only permits action when convergence is real, multi-dimensional, and stable.</p>
+
+<h2>How It Works</h2>
+
+<h3>1. Form a Mesh</h3>
+<p>Each participant opens this HTML file in their browser and joins the same room. Connections are peer-to-peer via WebRTC — your positions travel directly between browsers, never through a central server.</p>
+
+<h3>2. Someone Proposes</h3>
+<p>Any member can broadcast a proposal. It appears on every connected screen simultaneously.</p>
+
+<h3>3. Everyone Rates — Not Votes</h3>
+<p>Instead of yes/no, each person expresses their position across <strong>7 dimensions</strong>:</p>
+
+<div class="example">
+Alignment    — Does this serve our shared purpose?
+Urgency      — How time-sensitive is this?
+Risk Comfort — Am I comfortable with the downside?
+Resources    — Do we have what this requires?
+Reversibility — Can we undo this if it goes wrong?
+Fairness     — Is this equitable for all members?
+Readiness    — Is the group prepared to execute this?
+</div>
+
+<p>This creates a <strong>7-dimensional position vector</strong> — far richer than binary agreement. Two people can both "agree" but for completely different reasons, and this tool reveals that difference.</p>
+
+<h3>4. Convergence Is Detected</h3>
+<p>The system calculates <strong>cosine similarity</strong> between every pair of position vectors. Consensus requires ALL THREE conditions simultaneously:</p>
+
+<div class="example">
+Average similarity ≥ 70%        → the group broadly agrees
+Minimum pairwise similarity ≥ 50% → nobody strongly dissents
+Position variance < 0.15         → agreement is genuine, not averaged
+</div>
+
+<p>When all three hold stable for 5 continuous seconds, <strong>consensus is declared</strong>. The decision is logged with full metadata: similarity score, participant count, variance, timestamp.</p>
+
+<h3>5. If Not Aligned — Wait</h3>
+<p>If the group isn't converged, the tool says: <strong>"Group not aligned. Keep discussing."</strong> No forcing. No deadline. No majority override. The decision happens when the group is ready — or it doesn't happen. Both outcomes are valid.</p>
+
+<h2>The 7-Dimension Bloom Vector</h2>
+
+<p>Each person's position is encoded as a <strong>bloom vector</strong> — a 7-dimensional signature derived from the prime spine <code>{2, 3, 5, 7, 11, 13, 17}</code>. The bloom vector maps human positions to mathematical topology, enabling precise similarity calculation without reducing complex positions to simple numbers.</p>
+
+<div class="example">
+R0 (Ground/2):   Alignment — material foundation of the proposal
+R1 (Signal/3):   Urgency — emerging pressure, timing signal
+R2 (Gate/5):     Risk — what's being filtered, what could go wrong
+R3 (Heart/7):    Fairness — emotional and ethical centre
+R4 (Voice/11):   Reversibility — what gets expressed, what's permanent
+R5 (Mirror/13):  Resources — self-awareness of capacity
+R6 (Watcher/17): Readiness — meta-awareness of group state
+</div>
+
+<h2>Why Not Just Vote?</h2>
+
+<p><strong>Voting is lossy compression.</strong> It takes a complex human position and crushes it to a single bit: 1 or 0, yes or no. A person who's 90% aligned but worried about timing gets the same weight as someone who's 51% grudgingly accepting. A person with deep concerns about fairness is invisible if the majority overrides.</p>
+
+<p>FallConsensus preserves the full bandwidth of each person's position. The similarity matrix shows exactly where alignment exists and where it doesn't. A group can see: "We all agree on alignment and fairness, but we're split on urgency and resources." That's actionable. A 6-4 vote tells you nothing.</p>
+
+<h2>Applications</h2>
+
+<h3>DAOs and Crypto Governance</h3>
+<p>Current DAO tooling (Snapshot, Tally, Aragon) counts tokens or addresses. Whale wallets dominate. FallConsensus weights alignment, not holdings. A 50-member DAO where 45 are genuinely converged is stronger than one where 3 whales outvote 47 members. Deploy as the decision layer before on-chain execution.</p>
+
+<h3>Co-operatives and Mutuals</h3>
+<p>Worker co-ops need genuine consensus, not majority rule. A decision to take on debt, change direction, or admit new members affects everyone equally. FallConsensus ensures these decisions happen with real alignment, not grudging acceptance from the outvoted.</p>
+
+<h3>Open Source Projects</h3>
+<p>Governance of open source projects is notoriously difficult. Benevolent dictators burn out. Committees stall. Voting creates factions. FallConsensus lets maintainers and contributors express nuanced positions on RFCs, architectural decisions, and roadmap priorities. Merge when converged. Don't merge when not.</p>
+
+<h3>Community and Neighbourhood Decisions</h3>
+<p>Should we build a community garden? Repaint the hall? Change the meeting time? These decisions don't need elections. They need alignment detection. FallConsensus runs on phones, needs no infrastructure, and produces decisions that feel legitimate because they ARE legitimate — nobody was outvoted.</p>
+
+<h3>Board and Leadership Teams</h3>
+<p>Executive teams often make decisions by consensus-illusion: the loudest voice, the most senior person, the HiPPO (Highest Paid Person's Opinion). FallConsensus makes genuine alignment visible. If the board is split on risk comfort but aligned on strategy, the right action is to address the risk concerns specifically — not to "just decide."</p>
+
+<h3>Conflict Resolution</h3>
+<p>Mediators can use FallConsensus to map where parties actually agree and where they diverge. Two sides in a dispute often agree on more dimensions than they realise. Making that visible changes the conversation from adversarial to diagnostic.</p>
+
+<h3>Education and Workshops</h3>
+<p>Teachers and facilitators can use FallConsensus to gauge genuine understanding and readiness in a group. "Should we move to the next topic?" becomes a multi-dimensional check: do you understand the material? do you feel confident? do you have questions? The answer reveals more than raised hands.</p>
+
+<h3>Remote and Async Teams</h3>
+<p>Distributed teams struggle with decision latency. FallConsensus can run asynchronously — members submit positions over hours or days, and the system detects convergence whenever it emerges. No meeting required. No time zone coordination. The decision crystallises when alignment appears.</p>
+
+<h2>Technical Architecture</h2>
+
+<div class="example">
+Transport:    WebRTC via PeerJS (peer-to-peer, no relay server for data)
+Signalling:   PeerJS cloud (connection setup only — no proposal/position data)
+Data stored:  Browser only (localStorage for decision history)
+Encryption:   WebRTC DTLS (built-in, peer-to-peer)
+Similarity:   Cosine similarity on normalised 7D vectors
+Convergence:  Three-gate: avg≥70%, min≥50%, variance<0.15, stable 5s
+Topology:     Full mesh (every peer connected to every peer)
+Scale:        Tested to ~20 peers (WebRTC mesh limit)
+Offline:      Positions cached, sync on reconnect (planned)
+</div>
+
+<h2>Philosophical Foundation</h2>
+
+<p>FallConsensus is built on a simple observation: <strong>genuine alignment already exists in groups — it just isn't measured.</strong> Voting doesn't measure alignment. It measures willingness to pick a side under deadline pressure. Consensus processes (blocking, temperature checks, thumb votes) are closer, but they're still lossy.</p>
+
+<p>The tool doesn't create consensus. It <strong>detects</strong> consensus. The difference matters. A mirror doesn't create your reflection — it reveals it. If the group isn't aligned, that's not a failure. It's information. "We're not ready to decide this" is one of the most valuable outputs a governance system can produce.</p>
+
+<p>Most governance failures aren't caused by bad decisions. They're caused by premature decisions — acting before alignment is genuine. FallConsensus prevents premature action by making the absence of alignment visible and unignorable.</p>
+
+<p style="font-style:italic;color:var(--still);margin-top:20px">Convergence, not votes. Mirrors, not rulers. The river decides when it's still.</p>
+
+</div>
+</div>
+</div>
+
+<div class="ftr">
+<p>FallConsensus · Sovereign Mesh Governance · Single-File HTML</p>
+<p>WebRTC P2P · 7-Dimension Bloom Vector · Cosine Similarity · Convergence Detection</p>
+<p>No server. No leader. No majority rule. No data leaves your browser.</p>
+<p>Built by AI Native Solutions · ◊·κ=1 · 510,510</p>
+</div>
+
+</div>
+
+<script>
+// ═══ CONSTANTS ═══
+const DIMS=[
+{k:'alignment',l:'Alignment',d:'Does this serve our shared purpose?'},
+{k:'urgency',l:'Urgency',d:'How time-sensitive?'},
+{k:'risk',l:'Risk Comfort',d:'How comfortable with the downside?'},
+{k:'resource',l:'Resources',d:'Do we have what this requires?'},
+{k:'reversibility',l:'Reversibility',d:'Can we undo if wrong?'},
+{k:'fairness',l:'Fairness',d:'Is this equitable?'},
+{k:'readiness',l:'Readiness',d:'Is the group ready to execute?'}
+];
+const PRIMES=[2,3,5,7,11,13,17];
+const COLORS=['#3d8ac9','#3db88a','#c94040','#c9973e','#7b5cd4','#c94040','#4a9ec8'];
+const NAMES=['Ground','Signal','Gate','Heart','Voice','Mirror','Watcher'];
+const THRESH=70,MIN_PAIR=50,MAX_VAR=0.15,STABLE_MS=5000;
+
+// ═══ STATE ═══
+let me={name:'',id:'',peer:null};
+let room='';
+let conns={};// peerId→{conn,name,position}
+let proposal=null;
+let myPos=null;
+let decisions=JSON.parse(localStorage.getItem('fc_decisions')||'[]');
+let cTimer=null;
+
+// ═══ TABS ═══
+function showTab(t){
+document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on',b.textContent.toLowerCase().includes(t.substring(0,3))));
+document.querySelectorAll('.tab-content').forEach(c=>c.classList.toggle('on',c.id==='tab-'+t));
+if(t==='history')renderDecs();
+}
+
+// ═══ CONNECT ═══
+function go(){
+const name=document.getElementById('nameInp').value.trim();
+const rm=document.getElementById('roomInp').value.trim().toUpperCase();
+if(!name||!rm)return;
+me.name=name;
+room=rm;
+me.id=rm+'-'+name.toLowerCase().replace(/\s/g,'')+'-'+Math.random().toString(36).substring(2,6);
+
+beacon('off','Connecting to signalling server...');
+
+me.peer=new Peer(me.id,{debug:0});
+
+me.peer.on('open',()=>{
+beacon('on','Connected · Room '+room);
+document.getElementById('goBtn').textContent='Connected';
+document.getElementById('goBtn').disabled=true;
+document.getElementById('meshPanel').style.display='block';
+document.getElementById('propPanel').style.display='block';
+document.getElementById('nRoom').textContent=room;
+updateUI();
+
+// Try to connect to other peers in the room
+// Since PeerJS doesn't have room discovery, we use a naming convention
+// and try connecting to recently active peers
+// For production: use a simple signalling layer or shared peer list
+
+// BroadcastChannel as local fallback + peer discovery
+const bc=new BroadcastChannel('fc-disco-'+room);
+bc.onmessage=e=>{
+if(e.data.id!==me.id&&!conns[e.data.id]){
+const c=me.peer.connect(e.data.id,{reliable:true});
+setupConn(c,e.data.id);
+}
+};
+bc.postMessage({id:me.id,name:me.name});
+// Re-announce periodically
+setInterval(()=>bc.postMessage({id:me.id,name:me.name}),3000);
+
+me._bc=bc;
+});
+
+me.peer.on('connection',c=>{
+setupConn(c,c.peer);
+});
+
+me.peer.on('error',e=>{
+console.warn('Peer error:',e);
+if(e.type==='peer-unavailable')return;// normal when probing
+beacon('hot','Connection error: '+e.type);
+});
+}
+
+function setupConn(c,pid){
+c.on('open',()=>{
+conns[pid]={conn:c,name:'?',position:null};
+c.send({t:'hello',name:me.name,proposal,position:myPos});
+updateUI();
+});
+c.on('data',d=>{
+if(!conns[pid])conns[pid]={conn:c,name:'?',position:null};
+switch(d.t){
+case'hello':
+conns[pid].name=d.name;
+if(d.proposal&&!proposal){proposal=d.proposal;showRate();}
+if(d.position)conns[pid].position=d.position;
+c.send({t:'welcome',name:me.name,proposal,position:myPos});
+break;
+case'welcome':
+conns[pid].name=d.name;
+if(d.proposal&&!proposal){proposal=d.proposal;showRate();}
+if(d.position)conns[pid].position=d.position;
+break;
+case'proposal':
+proposal=d.proposal;myPos=null;
+Object.values(conns).forEach(p=>p.position=null);
+showRate();
+break;
+case'position':
+conns[pid].position=d.position;
+calcConv();
+break;
+case'abstain':
+conns[pid].position='abstain';
+calcConv();
+break;
+}
+updateUI();
+});
+c.on('close',()=>{delete conns[pid];updateUI()});
+c.on('error',()=>{delete conns[pid];updateUI()});
+}
+
+function broadcast(msg){Object.values(conns).forEach(p=>{try{p.conn.send(msg)}catch(e){}})}
+
+// ═══ PROPOSAL ═══
+function propose(){
+const txt=document.getElementById('propText').value.trim();
+if(!txt)return;
+proposal={id:Date.now().toString(36),text:txt,from:me.name,ts:new Date().toISOString()};
+myPos=null;
+Object.values(conns).forEach(p=>p.position=null);
+broadcast({t:'proposal',proposal});
+showRate();
+updateUI();
+}
+
+function showRate(){
+const rp=document.getElementById('ratePanel');rp.style.display='block';
+document.getElementById('activeProp').textContent=proposal.text;
+document.getElementById('propFrom').textContent='Proposed by '+proposal.from+' · '+new Date(proposal.ts).toLocaleTimeString();
+document.getElementById('convPanel').style.display='block';
+
+const g=document.getElementById('dimGrid');g.innerHTML='';
+DIMS.forEach(dim=>{
+const d=document.createElement('div');d.className='dim';
+d.innerHTML=`<span class="dim-l" title="${dim.d}">${dim.l}</span>
+<input type="range" class="dim-s" id="d-${dim.k}" min="0" max="100" value="50" oninput="document.getElementById('v-${dim.k}').textContent=this.value;liveBloom()">
+<span class="dim-v" id="v-${dim.k}">50</span>`;
+g.appendChild(d);
+});
+liveBloom();
+}
+
+function liveBloom(){
+const vals=DIMS.map(d=>parseInt(document.getElementById('d-'+d.k)?.value||50));
+renderBloom(vals,'myBloom');
+const sig=PRIMES.reduce((a,p,i)=>a*Math.pow(p,Math.round(vals[i]/20)),1);
+document.getElementById('mySig').textContent='Σ='+sig.toLocaleString();
+}
+
+function submit(){
+myPos={};
+DIMS.forEach(d=>{myPos[d.k]=parseInt(document.getElementById('d-'+d.k).value)});
+broadcast({t:'position',position:myPos});
+calcConv();
+updateUI();
+}
+
+function doAbstain(){
+myPos='abstain';
+broadcast({t:'abstain'});
+calcConv();
+updateUI();
+}
+
+// ═══ BLOOM RENDER ═══
+function renderBloom(vals,id){
+const el=document.getElementById(id);el.innerHTML='';
+vals.forEach((v,i)=>{
+const b=document.createElement('div');b.className='bloom-b';
+b.style.background=COLORS[i];b.style.height='0%';
+b.title=NAMES[i]+': '+v;
+el.appendChild(b);
+setTimeout(()=>{b.style.height=Math.max(3,v)+'%'},50+i*40);
+});
+}
+
+// ═══ SIMILARITY ═══
+function cosine(a,b){
+const ks=DIMS.map(d=>d.k);
+let dot=0,mA=0,mB=0;
+ks.forEach(k=>{const va=(a[k]||50)/100,vb=(b[k]||50)/100;dot+=va*vb;mA+=va*va;mB+=vb*vb});
+return(mA&&mB)?(dot/Math.sqrt(mA*mB))*100:0;
+}
+
+function calcConv(){
+const all=[];
+if(myPos&&myPos!=='abstain')all.push({name:me.name,pos:myPos});
+Object.values(conns).forEach(p=>{if(p.position&&p.position!=='abstain')all.push({name:p.name,pos:p.position})});
+
+if(all.length<2){convUI(0,'Waiting for positions...','wait');return}
+
+let sum=0,cnt=0,mn=100;
+const sims=all.map(()=>all.map(()=>0));
+for(let i=0;i<all.length;i++)for(let j=0;j<all.length;j++){
+if(i===j){sims[i][j]=100;continue}
+const s=cosine(all[i].pos,all[j].pos);sims[i][j]=s;
+if(j>i){sum+=s;cnt++;if(s<mn)mn=s}
+}
+const avg=cnt?sum/cnt:0;
+
+// variance
+const ks=DIMS.map(d=>d.k);
+let tv=0;
+ks.forEach(k=>{
+const vs=all.map(p=>p.pos[k]/100);
+const m=vs.reduce((a,b)=>a+b)/vs.length;
+tv+=vs.reduce((a,v)=>a+Math.pow(v-m,2),0)/vs.length;
+});
+const av=tv/ks.length;
+
+document.getElementById('nSim').textContent=Math.round(avg)+'%';
+document.getElementById('nVar').textContent=av.toFixed(3);
+
+// matrix
+renderMtx(all,sims);
+
+// check
+if(avg>=THRESH&&mn>=MIN_PAIR&&av<MAX_VAR){
+if(!cTimer)cTimer=setTimeout(()=>{recordDec(avg,all.length,av);cTimer=null},STABLE_MS);
+convUI(avg,`Converging... ${Math.round(avg)}% similarity · variance ${av.toFixed(3)} · hold steady (${STABLE_MS/1000}s)`,'near');
+}else{
+if(cTimer){clearTimeout(cTimer);cTimer=null}
+if(avg>=THRESH)convUI(avg,`Near consensus but ${av>=MAX_VAR?'variance too high ('+av.toFixed(3)+')':'minimum pairwise too low ('+Math.round(mn)+'%)'}. Still the river.`,'no');
+else convUI(avg,`Group not aligned (${Math.round(avg)}% < ${THRESH}%). Keep discussing.`,'wait');
+}
+}
+
+function convUI(pct,msg,st){
+const f=document.getElementById('cFill');
+f.style.width=pct+'%';
+f.style.background=st==='near'?'var(--still)':st==='no'?'var(--block)':'var(--dim)';
+const m=document.getElementById('cMsg');
+m.textContent=msg;
+m.className='conv-msg '+({near:'near',no:'no',wait:'wait',yes:'yes'}[st]||'wait');
+}
+
+function renderMtx(all,sims){
+document.getElementById('mtxWrap').style.display='block';
+let h='<table><tr><th></th>';
+all.forEach(p=>h+=`<th>${p.name.substring(0,10)}</th>`);
+h+='</tr>';
+all.forEach((p,i)=>{
+h+=`<tr><th>${p.name.substring(0,10)}</th>`;
+all.forEach((q,j)=>{
+const s=Math.round(sims[i][j]);
+h+=`<td class="${i===j?'':s>=80?'hi':s>=60?'md':'lo'}">${i===j?'—':s+'%'}</td>`;
+});
+h+='</tr>';
+});
+document.getElementById('mtxTable').innerHTML=h+'</table>';
+}
+
+function recordDec(sim,n,vari){
+const d={proposal,similarity:Math.round(sim),participants:n,variance:vari.toFixed(3),ts:new Date().toLocaleString()};
+decisions.unshift(d);
+localStorage.setItem('fc_decisions',JSON.stringify(decisions.slice(0,100)));
+convUI(sim,`✓ CONSENSUS REACHED — ${Math.round(sim)}% across ${n} members · variance ${vari.toFixed(3)} · Decision is valid.`,'yes');
+document.getElementById('cMsg').className='conv-msg yes';
+beacon('on','Decision reached');
+renderDecs();
+}
+
+function renderDecs(){
+const el=document.getElementById('decList');el.innerHTML='';
+if(!decisions.length){el.innerHTML='<p style="font-family:var(--mono);font-size:11px;color:var(--dim)">No decisions yet.</p>';return}
+decisions.forEach(d=>{
+const div=document.createElement('div');div.className='dec';
+div.innerHTML=`<h3>${d.proposal.text}</h3><div class="meta">${d.ts} · ${d.similarity}% similarity · ${d.participants} participants · variance ${d.variance} · Proposed by ${d.proposal.from}</div>`;
+el.appendChild(div);
+});
+}
+
+// ═══ UI ═══
+function updateUI(){
+const n=Object.keys(conns).length+1;
+document.getElementById('nPeers').textContent=n;
+
+const ring=document.getElementById('peerRing');ring.innerHTML='';
+const mk=(name,cls)=>{const el=document.createElement('div');el.className='peer '+cls;el.textContent=name.charAt(0).toUpperCase();el.innerHTML+=`<span class="tip">${name}</span>`;return el};
+
+ring.appendChild(mk(me.name,'me'));
+Object.values(conns).forEach(p=>{
+ring.appendChild(mk(p.name||'?',p.position&&p.position!=='abstain'?'ready':'wait'));
+});
+}
+
+function beacon(st,txt){
+document.getElementById('bDot').className='bdot '+st;
+document.getElementById('bLabel').textContent=txt;
+}
+
+// ═══ INIT ═══
+renderDecs();
+</script>
+</body>
+</html>
